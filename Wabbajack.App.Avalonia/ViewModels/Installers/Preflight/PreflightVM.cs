@@ -18,6 +18,7 @@ using Wabbajack.Common;
 using Wabbajack.App.Avalonia.ViewModels;
 using Wabbajack.Installer.Preflight;
 using Wabbajack.App.Avalonia.LoginManagers;
+using Wabbajack.App.Avalonia.Services.BrowserAutomation;
 using Wabbajack.RateLimiter;
 
 namespace Wabbajack.App.Avalonia.ViewModels.Installers.Preflight;
@@ -34,6 +35,7 @@ public partial class PreflightVM : ViewModel
     private readonly ProgressViewModel _progressHost;
     private readonly ILogger _logger;
     private readonly PreflightActionDispatcher _actions;
+    private readonly BrowserAutomationService _browserAutomation;
     private readonly CancellationTokenSource _cts = new();
     private readonly ObservableCollection<PreflightCheckVM> _checks = new();
     private readonly Dictionary<string, PreflightCheckVM> _byId = new(StringComparer.Ordinal);
@@ -51,6 +53,7 @@ public partial class PreflightVM : ViewModel
         _runner = runner;
         _progressHost = progressHost;
         _logger = logger;
+        _browserAutomation = serviceProvider.GetRequiredService<BrowserAutomationService>();
 
         // Built before the dispatcher, which routes the repair action to it. Its own buttons go back out
         // through ExecuteAction, so both ways of asking for the same thing take the same path.
@@ -78,7 +81,7 @@ public partial class PreflightVM : ViewModel
 
         BulkDownloads = new BulkDownloadsVM(runner, events.OfType<ArchiveChanged>().Select(e => e.Status), downloadSpeed);
         ManualDownloads = new ManualDownloadsVM(runner.Context.Acquirer, events.OfType<ManualQueueChanged>(),
-            _cts.Token, logger, serviceProvider.GetService<SettingsManager>());
+            _browserAutomation, _cts.Token, logger, serviceProvider.GetService<SettingsManager>());
 
         events.OfType<CheckChanged>()
             .ObserveOnGuiThread()
@@ -328,6 +331,7 @@ public partial class PreflightVM : ViewModel
         BulkDownloads.Dispose();
         ManualDownloads.Dispose();
         GameFiles.Dispose();
+        _browserAutomation.DisposeAsync().AsTask().FireAndForget();
         foreach (var check in _checks) check.Dispose();
 
         // The title bar carries the checklist's own progress, so it goes when the page does. Recompute is

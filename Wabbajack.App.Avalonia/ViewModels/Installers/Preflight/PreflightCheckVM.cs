@@ -22,7 +22,8 @@ public enum PreflightDetailKind
 
 /// <summary>
 ///     One row on the checklist. Everything here is a projection of the runner's <see cref="CheckStatus" />;
-///     the only decision the row makes is which single action to offer as its button.
+///     the row offers the check's first action as its primary button and the second (if any) beside it -
+///     game-installed's "Log in to Steam" / "Locate game" is the case that needs both.
 /// </summary>
 public partial class PreflightCheckVM : ViewModel
 {
@@ -30,6 +31,7 @@ public partial class PreflightCheckVM : ViewModel
     private const string ResumeActionId = "retry";
 
     private string _actionId = string.Empty;
+    private string _secondaryActionId = string.Empty;
 
     public PreflightCheckVM(CheckStatus status, Func<string, string, CancellationToken, Task> execute,
         CancellationToken token)
@@ -39,10 +41,15 @@ public partial class PreflightCheckVM : ViewModel
         StatusText = string.Empty;
         Message = string.Empty;
         ActionLabel = string.Empty;
+        SecondaryActionLabel = string.Empty;
 
         ActionCommand = ReactiveCommand.CreateFromTask(
             () => execute(Id, _actionId, token),
             this.WhenAnyValue(x => x.HasAction));
+
+        SecondaryActionCommand = ReactiveCommand.CreateFromTask(
+            () => execute(Id, _secondaryActionId, token),
+            this.WhenAnyValue(x => x.HasSecondaryAction));
 
         Apply(status);
     }
@@ -93,7 +100,12 @@ public partial class PreflightCheckVM : ViewModel
     [Reactive] public partial string ActionLabel { get; set; }
     [Reactive] public partial bool HasAction { get; set; }
 
+    /// <summary>Second action from the check, when it offers more than one (e.g. Locate game).</summary>
+    [Reactive] public partial string SecondaryActionLabel { get; set; }
+    [Reactive] public partial bool HasSecondaryAction { get; set; }
+
     public ReactiveCommand<Unit, Unit> ActionCommand { get; }
+    public ReactiveCommand<Unit, Unit> SecondaryActionCommand { get; }
 
     /// <summary>Passed, or a Warning the user accepted.</summary>
     public bool IsSatisfied => State == PreflightState.Passed || (State == PreflightState.Warning && Acknowledged);
@@ -151,8 +163,14 @@ public partial class PreflightCheckVM : ViewModel
         if (action == null && status.State == PreflightState.Cancelled)
             action = new PreflightAction(ResumeActionId, "Resume");
 
+        var secondary = status.Actions.ElementAtOrDefault(1);
+
         _actionId = action?.Id ?? string.Empty;
         ActionLabel = action?.Title ?? string.Empty;
         HasAction = action != null;
+
+        _secondaryActionId = secondary?.Id ?? string.Empty;
+        SecondaryActionLabel = secondary?.Title ?? string.Empty;
+        HasSecondaryAction = secondary != null;
     }
 }

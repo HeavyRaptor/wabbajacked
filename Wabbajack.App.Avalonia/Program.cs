@@ -9,6 +9,7 @@ using NLog.Targets;
 using Octokit;
 using Wabbajack.App.Avalonia.LoginManagers;
 using Wabbajack.App.Avalonia.Services;
+using Wabbajack.App.Avalonia.Services.BrowserAutomation;
 using Wabbajack.App.Avalonia.Util;
 using Wabbajack.App.Avalonia.ViewModels;
 using Wabbajack.App.Avalonia.ViewModels.Common;
@@ -101,6 +102,7 @@ public static class Program
     private static void ConfigureServices(IServiceCollection services)
     {
         services.AddOSIntegrated();
+        services.AddBrowserAutomation();
 
         // Registered before AddSteam so it wins over the intervention-based default, which raises a
         // GetAuthCode intervention that the throwing handler below would take a login down over.

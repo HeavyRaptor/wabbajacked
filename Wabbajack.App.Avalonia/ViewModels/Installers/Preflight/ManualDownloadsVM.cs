@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using ReactiveUI;
 using ReactiveUI.SourceGenerators;
 using Wabbajack.App.Avalonia.Services;
+using Wabbajack.App.Avalonia.Services.BrowserAutomation;
 using Wabbajack.App.Avalonia.Util;
 using Wabbajack.App.Avalonia.ViewModels;
 using Wabbajack.App.Avalonia.ViewModels.Common;
@@ -44,6 +45,7 @@ public partial class ManualDownloadsVM : ViewModel
     private static readonly FilePicker Dialogs = new();
 
     private readonly IManualDownloadAcquirer _acquirer;
+    private readonly BrowserAutomationService _browserAutomation;
     private readonly ILogger _logger;
     private readonly CancellationToken _token;
     private readonly SourceCache<ManualDownloadItem, string> _items = new(i => i.Key);
@@ -66,13 +68,16 @@ public partial class ManualDownloadsVM : ViewModel
     private bool _settingsLoaded;
 
     public ManualDownloadsVM(IManualDownloadAcquirer acquirer, IObservable<ManualQueueChanged> queue,
-        CancellationToken token, ILogger logger, SettingsManager? settings = null)
+        BrowserAutomationService browserAutomation, CancellationToken token, ILogger logger,
+        SettingsManager? settings = null)
     {
         _acquirer = acquirer;
+        _browserAutomation = browserAutomation;
         _logger = logger;
         _token = token;
         _settings = settings;
         AutoOpenText = string.Empty;
+        AutomationStatusText = string.Empty;
 
         WatchStatusText = string.Empty;
         Instructions = string.Empty;
@@ -129,6 +134,11 @@ public partial class ManualDownloadsVM : ViewModel
             })
             .DisposeWith(CompositeDisposable);
 
+        browserAutomation.Status
+            .ObserveOnGuiThread()
+            .Subscribe(status => AutomationStatusText = status)
+            .DisposeWith(CompositeDisposable);
+
         WatchFolderPicker.WhenAnyValue(x => x.TargetPath)
             .Skip(1)
             .Where(p => p != default && p.DirectoryExists())
@@ -154,9 +164,18 @@ public partial class ManualDownloadsVM : ViewModel
             .Skip(1)
             .Subscribe(on =>
             {
-                if (_settingsLoaded) SaveSettings(on);
+                if (_settingsLoaded) SaveSettings();
                 if (on) MaybeOpenNext();
                 else AutoOpenText = string.Empty;
+            })
+            .DisposeWith(CompositeDisposable);
+
+        this.WhenAnyValue(x => x.AutomateDownloads)
+            .Skip(1)
+            .Subscribe(on =>
+            {
+                if (_settingsLoaded) SaveSettings();
+                if (on) MaybeOpenNext();
             })
             .DisposeWith(CompositeDisposable);
         LoadSettings();
@@ -223,6 +242,12 @@ public partial class ManualDownloadsVM : ViewModel
     [Reactive] public partial string NoticeText { get; set; }
     [Reactive] public partial string WatchFolderText { get; set; }
     [Reactive] public partial bool ShowAll { get; set; }
+
+    /// <summary>Whether Playwright should click through Nexus download pages automatically.</summary>
+    [Reactive] public partial bool AutomateDownloads { get; set; }
+
+    /// <summary>Latest status message from the browser automation layer.</summary>
+    [Reactive] public partial string AutomationStatusText { get; set; }
 
     public ReactiveCommand<Unit, Unit> OpenPageCommand { get; }
     public ReactiveCommand<Unit, Unit> SkipCommand { get; }
@@ -295,12 +320,30 @@ public partial class ManualDownloadsVM : ViewModel
     /// </summary>
     private void MaybeOpenNext()
     {
-        if (!OpenNextAutomatically) return;
-        if (_planner.Next(_acquirer.Snapshot()) is not { } key) return;
+        if (!OpenNextAutomatically && !AutomateDownloads) return;
 
+        if (AutomateDownloads)
+        {
+            // Enqueue every pending item the automation layer has not already seen. The service
+            // deduplicates by archive name, so this is safe to call on every event.
+            foreach (var item in _acquirer.Snapshot().Where(i => i.State != ManualDownloadState.Moved))
+            {
+                var target = Target(item.Key);
+                if (target?.Url is { } url)
+                    _browserAutomation.Enqueue(item.Archive, url, _acquirer.WatchFolder);
+            }
+
+            AutoOpenText = "Watching Nexus downloads";
+            return;
+        }
+
+        if (_planner.Next(_acquirer.Snapshot()) is not { } key) return;
         _planner.Opened(key);
-        if (Target(key)?.Url is { } url) UIUtils.OpenWebsite(url);
-        AutoOpenText = $"Opened the page for {key}";
+        if (Target(key)?.Url is { } manualUrl)
+        {
+            UIUtils.OpenWebsite(manualUrl);
+            AutoOpenText = $"Opened the page for {key}";
+        }
     }
 
     private async void LoadSettings()
@@ -308,7 +351,11 @@ public partial class ManualDownloadsVM : ViewModel
         try
         {
             if (_settings != null)
-                OpenNextAutomatically = (await _settings.Load<ManualDownloadSettings>(SettingsKey)).OpenNextAutomatically;
+            {
+                var settings = await _settings.Load<ManualDownloadSettings>(SettingsKey);
+                OpenNextAutomatically = settings.OpenNextAutomatically;
+                AutomateDownloads = settings.AutomateDownloads;
+            }
         }
         catch (Exception ex)
         {
@@ -320,12 +367,18 @@ public partial class ManualDownloadsVM : ViewModel
         }
     }
 
-    private async void SaveSettings(bool openNextAutomatically)
+    private async void SaveSettings()
     {
         try
         {
             if (_settings != null)
-                await _settings.Save(SettingsKey, new ManualDownloadSettings {OpenNextAutomatically = openNextAutomatically});
+            {
+                await _settings.Save(SettingsKey, new ManualDownloadSettings
+                {
+                    OpenNextAutomatically = OpenNextAutomatically,
+                    AutomateDownloads = AutomateDownloads
+                });
+            }
         }
         catch (Exception ex)
         {

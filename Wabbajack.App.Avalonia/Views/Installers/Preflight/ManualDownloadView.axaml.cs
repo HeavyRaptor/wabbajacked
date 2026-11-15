@@ -102,6 +102,28 @@ public partial class ManualDownloadView : ReactiveUserControl<ManualDownloadsVM>
                 })
                 .DisposeWith(dispose);
 
+            this.WhenAnyValue(x => x.ViewModel!.AutomateDownloads)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(on => AutomateCheck.IsChecked = on)
+                .DisposeWith(dispose);
+
+            Observable.FromEventPattern<RoutedEventArgs>(AutomateCheck, nameof(CheckBox.IsCheckedChanged))
+                .Subscribe(_ =>
+                {
+                    if (ViewModel is { } vm && vm.AutomateDownloads != (AutomateCheck.IsChecked == true))
+                        vm.AutomateDownloads = AutomateCheck.IsChecked == true;
+                })
+                .DisposeWith(dispose);
+
+            this.WhenAnyValue(x => x.ViewModel!.AutomationStatusText)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(text =>
+                {
+                    AutomationStatusText.Text = text;
+                    AutomationStatusText.IsVisible = !string.IsNullOrWhiteSpace(text);
+                })
+                .DisposeWith(dispose);
+
             this.WhenAnyValue(x => x.ViewModel!.AutoOpenText)
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(t =>

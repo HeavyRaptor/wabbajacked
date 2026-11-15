@@ -69,7 +69,20 @@ public partial class PreflightCheckRowView : ReactiveUserControl<PreflightCheckV
                 .Subscribe(has => ActionButton.IsVisible = has)
                 .DisposeWith(dispose);
 
+            this.WhenAnyValue(x => x.ViewModel!.SecondaryActionLabel)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(label => SecondaryActionButton.Text = label)
+                .DisposeWith(dispose);
+
+            this.WhenAnyValue(x => x.ViewModel!.HasSecondaryAction)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(has => SecondaryActionButton.IsVisible = has)
+                .DisposeWith(dispose);
+
             this.BindCommand(ViewModel, vm => vm.ActionCommand, v => v.ActionButton)
+                .DisposeWith(dispose);
+
+            this.BindCommand(ViewModel, vm => vm.SecondaryActionCommand, v => v.SecondaryActionButton)
                 .DisposeWith(dispose);
         });
     }

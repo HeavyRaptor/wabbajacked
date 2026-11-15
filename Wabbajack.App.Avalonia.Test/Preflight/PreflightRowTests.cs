@@ -84,7 +84,28 @@ public class PreflightRowTests
         }));
 
         Assert.Equal("Log in", row.ActionLabel);
+        Assert.Equal("Skip", row.SecondaryActionLabel);
+        Assert.True(row.HasSecondaryAction);
         Assert.False(Row(Status("disk-space", PreflightState.Passed)).HasAction);
+        Assert.False(Row(Status("disk-space", PreflightState.Passed)).HasSecondaryAction);
+    }
+
+    /// <summary>
+    ///     game-installed offers Steam login and Locate game together; both have to reach the row or the
+    ///     message's "locate the game" clause has no button.
+    /// </summary>
+    [Fact]
+    public void GameInstalled_OffersLocateGameBesideStoreLogin()
+    {
+        var row = Row(Status(PreflightCheckIds.GameInstalled, PreflightState.Failed, actions: new[]
+        {
+            PreflightAction.StoreLogin, PreflightAction.BrowseGameFolder
+        }));
+
+        Assert.Equal(PreflightAction.StoreLogin.Title, row.ActionLabel);
+        Assert.Equal(PreflightAction.BrowseGameFolder.Title, row.SecondaryActionLabel);
+        Assert.True(row.HasAction);
+        Assert.True(row.HasSecondaryAction);
     }
 
     [Theory]

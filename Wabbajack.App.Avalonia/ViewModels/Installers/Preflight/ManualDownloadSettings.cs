@@ -4,4 +4,5 @@ namespace Wabbajack.App.Avalonia.ViewModels.Installers.Preflight;
 public sealed class ManualDownloadSettings
 {
     public bool OpenNextAutomatically { get; set; }
+    public bool AutomateDownloads { get; set; }
 }

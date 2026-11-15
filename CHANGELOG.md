@@ -1,5 +1,8 @@
 ### Changelog
 
+#### Version - 4.3.3.0 - 11/14/2026
+* Added optional Playwright-based browser automation for Nexus manual downloads: a visible Chrome window clicks Slow/Standard download automatically, with a 5-7s delay between every click and at most 3 concurrent downloads. The first run pauses so you can log in to Nexus; after that the session is reused. Dev setup: after building, run `powershell Wabbajack.App.Avalonia/bin/Debug/net10.0/playwright.ps1 install --with-deps` (or `pwsh` if you have PowerShell Core installed).
+
 #### Version - 4.3.2.2 - 11/05/2026
 * Metrics improvements
 * Added Vampire: The Masquerade - Bloodlines 2 support ([@daulvec](https://github.com/daulvec)) PR #3032
